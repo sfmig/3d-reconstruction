@@ -13,11 +13,11 @@ import matplotlib.pyplot as plt
 
 # %%%%%%%%%%%%
 # Input data
-belt_coords_csv = '/Users/sofia/swc/project_3Dhomography/20240221/belt_corner_coords_80200.csv'
+belt_coords_csv = '/Users/sofia/swc/project_3Dhomography/data/belt_corner_coords_80200.csv'
 camera_paths = {
-    'side': '/Users/sofia/swc/project_3Dhomography/20240221/Side_80200.png',
-    'front': '/Users/sofia/swc/project_3Dhomography/20240221/Front_80200.png',
-    'overhead': '/Users/sofia/swc/project_3Dhomography/20240221/Overhead_80200.png'
+    'side': '/Users/sofia/swc/project_3Dhomography/data/Side_80200.png',
+    'front': '/Users/sofia/swc/project_3Dhomography/data/Front_80200.png',
+    'overhead': '/Users/sofia/swc/project_3Dhomography/data/Overhead_80200.png'
 }
 
 # %%%%%%%%%%%%
@@ -54,10 +54,10 @@ for cam, path in camera_paths.items():
 
 # Map point string names to integer names and sort
 belt_points_str2int = {
-    'StartPlatR': 3,
-    'StartPlatL': 0,
-    'TransitionR': 2,
-    'TransitionL': 1,
+    'StartPlatR': 0,
+    'StartPlatL': 3,
+    'TransitionR': 1,
+    'TransitionL': 2,
 }
 
 fn_belt_points_str2int = np.vectorize(
@@ -139,10 +139,15 @@ for cam, ax in zip(list_cameras, axes.reshape(-1)):
 # fig.show()
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# belt points in world coord system
-# belt_coords_WCS
+# Belt points in world coord system
+belt_coords_WCS = np.array(
+    [],
+    [],
+    [],
+    [],
+)
 
-# plot
+# plot 3D
 
 # %%
 # Estimate intrinsic matrix of the three cameras
@@ -152,7 +157,7 @@ for cam, ax in zip(list_cameras, axes.reshape(-1)):
 # Estimate extrinsic matrix 
         
 # run pnp for each camera
-retval, rvec, tvec = cv.solvePnP(
+retval, rvec, tvec = cv2.solvePnP(
     objectPoints, 
     imagePoints, 
     cameraMatrix,
