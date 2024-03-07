@@ -1,17 +1,15 @@
-# %%
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Imports
 import cv2
-# import csv
 import pandas as pd
 import numpy as np
 
 import matplotlib.pyplot as plt
 
-# %matplotlib widget
-# %matplotlib ipympl
 %matplotlib widget
 %matplotlib widget
 
-# %%%%%%%%%%%%
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Input data
 belt_coords_csv = '/Users/sofia/swc/project_3Dhomography/data/belt_corner_coords_80200.csv'
 camera_paths = {
@@ -20,29 +18,29 @@ camera_paths = {
     'overhead': '/Users/sofia/swc/project_3Dhomography/data/Overhead_80200.png'
 }
 
-# %%%%%%%%%%%%
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Camera specs
 camera_specs = {
     'side':{
         'focal_length_mm': 16,
-        'height_px': 230,
-        'width_px': 1920,
+        'y_size_px': 230,
+        'x_size_px': 1920,
         'pixel_size_x_mm': 4.8*10-3, # 4.8um = 4.8e-3 mm
         'pixel_size_y_mm': 4.8*10-3 # 4.8um = 4.8e-3 mm
     },
     'front':{
         'focal_length_mm': 16,
-        'height_px': 230, #ok?
-        'width_px': 296, #ok?
-        'pixel_size_x_mm': 3.45*10-3, # 4.8um = 4.8e-3 mm
-        'pixel_size_y_mm': 3.45*10-3 # 4.8um = 4.8e-3 mm
+        'y_size_px': 320, #ok?
+        'x_size_px': 296, #ok?
+        'pixel_size_x_mm': 3.45*10-3, 
+        'pixel_size_y_mm': 3.45*10-3 
     },
     'overhead':{
         'focal_length_mm': 12,
-        'height_px': 116, #ok?
-        'width_px': 992, #ok?
-        'pixel_size_x_mm': 3.45*10-3, # 4.8um = 4.8e-3 mm
-        'pixel_size_y_mm': 3.45*10-3 # 4.8um = 4.8e-3 mm
+        'y_size_px': 116, #ok?
+        'x_size_px': 992, #ok?
+        'pixel_size_x_mm': 3.45*10-3, 
+        'pixel_size_y_mm': 3.45*10-3
     },
 }
 
@@ -125,8 +123,8 @@ for cam, ax in zip(list_cameras, axes.reshape(-1)):
         )
 
     # set axes limits,
-    ax.set_xlim(0, camera_specs[cam]['width_px'])
-    ax.set_ylim(0, camera_specs[cam]['height_px'])
+    ax.set_xlim(0, camera_specs[cam]['x_size_px'])
+    ax.set_ylim(0, camera_specs[cam]['y_size_px'])
     ax.invert_yaxis()
 
     # add labels
@@ -136,38 +134,217 @@ for cam, ax in zip(list_cameras, axes.reshape(-1)):
     ax.axis('equal')
 
 
-# fig.show()
-
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Belt points in world coord system
-belt_coords_WCS = np.array(
-    [],
-    [],
-    [],
-    [],
+belt_coords_WCS = np.array([
+    [0.0, 0.0, 10.0],
+    [470.0, 0.0, 10.0],
+    [470.0, 52.0, 10.0],
+    [0.0, 52.0, 10.0],
+])
+
+# plot 3D
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+
+# add scatter
+ax.scatter(
+    belt_coords_WCS[:,0],
+    belt_coords_WCS[:,1],
+    belt_coords_WCS[:,2],
+    s=50,
+    c='r',
+    marker='.',
+    linewidth=.5,
+    alpha=1,
 )
+
+# add text
+for id in range(belt_coords_WCS.shape[0]):
+    ax.text(
+        belt_coords_WCS[id,0],
+        belt_coords_WCS[id,1],
+        belt_coords_WCS[id,2],
+        s=id,
+        c='r'
+)
+
+# %% Estimate extrinsic matrix?
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Estimate intrinsic matrix of the three cameras
+
+camera_intrinsics = dict()
+for cam in camera_specs.keys():
+
+    fx = camera_specs[cam]['focal_length_mm']/camera_specs[cam]['pixel_size_x_mm']
+    fy = camera_specs[cam]['focal_length_mm']/camera_specs[cam]['pixel_size_y_mm']
+    cx = int(camera_specs[cam]['x_size_px']/2.0) #---- centre or pixel coord?
+    cy = int(camera_specs[cam]['y_size_px']/2.0)
+
+    camera_intrinsics[cam] = np.array(
+        [
+            [fx, 0.0, cx],
+            [0.0, fy, cy],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+camera_intrinsics
+# %%%%%%%%%%
+# Guess extrinsics    
+# from extrinsic2pyramid.util.camera_pose_visualizer import CameraPoseVisualizer
+# import numpy as np
+# %matplotlib widget
+
+
+# # side
+# side_rot = np.array(
+#     [
+#         [1,0,0],
+#         [0,1,0],
+#         [0,0,1],
+#     ],
+#     dtype=float
+# )
+# side_trans = np.array([0,0,0,1]).reshape(-1,1)
+# side_full = np.hstack(
+#     [
+#         np.vstack([side_rot, [0,0,0]]),
+#         side_trans
+#     ]
+# )
+
+# # visualiser
+# visualizer = CameraPoseVisualizer([-50, 50], [-50, 50], [0, 50])
+
+# visualizer.extrinsic2pyramid(side_full, 'c', 50)
+# visualizer.show()
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Estimate extrinsic matrices
+        
+# run pnp for each camera
+camera_extrinsics = dict()
+for cam in camera_specs.keys():
+
+    # solvePnP
+    # flags:
+    # initial guess?
+    # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#ga650ba4d286a96d992f82c3e6dfa525fa
+    retval, rvec, tvec = cv2.solvePnP(
+        belt_coords_WCS, 
+        belt_coords_CCS[cam], 
+        camera_intrinsics[cam], # cameraMatrix,
+        np.array([]), # no distorsion
+        rvec=,
+        tvec=,
+        useExtrinsicGuess=True,
+        cv2.SOLVEPNP_P3P
+    )
+
+    rotm, _ = cv2.Rodrigues(rvec)
+    #-------
+    # tvec = np.zeros_like(tvec)
+    # --------
+
+    camera_pose_full = np.vstack(
+        [
+            np.hstack([rotm, tvec]),
+            np.flip(np.eye(1,4))
+        ]
+    )
+        
+
+    camera_extrinsics[cam] = {
+        'retval': retval,
+        'rvec': rvec,
+        'tvec': tvec,
+        'rotm': rotm,
+        'full': camera_pose_full
+    }
+
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Plot camera poses in WCS
 
 # plot 3D
 
-# %%
-# Estimate intrinsic matrix of the three cameras
+
+for cam in camera_extrinsics.keys():
+    tvec = camera_extrinsics[cam]['tvec']
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    # add wcs
+    # ax.quiver([0,0,0], [0,0,0], [0,0,0], [5,0,0], [0,5,0], [0,0,5], length=0.1, normalize=False)
+    for row, col in zip(np.eye(3), ['r','g','b']):
+        ax.quiver(
+            0, 0, 0, 
+            row[0], row[1], row[2], 
+            color=col,
+            length=100, 
+            arrow_length_ratio=0,
+            normalize=True
+        )
 
 
-# %%
-# Estimate extrinsic matrix 
-        
-# run pnp for each camera
-retval, rvec, tvec = cv2.solvePnP(
-    objectPoints, 
-    imagePoints, 
-    cameraMatrix,
-)
+    # add belt points
+    ax.scatter(
+        belt_coords_WCS[:,0],
+        belt_coords_WCS[:,1],
+        belt_coords_WCS[:,2],
+        s=50,
+        c='r',
+        marker='.',
+        linewidth=.5,
+        alpha=1,
+    )
 
-        
+    # add text
+    for id in range(belt_coords_WCS.shape[0]):
+        ax.text(
+            belt_coords_WCS[id,0],
+            belt_coords_WCS[id,1],
+            belt_coords_WCS[id,2],
+            s=id,
+            c='r'
+    )
+
+    # add camera translations
+    # for cam in ['side']: #camera_extrinsics.keys():
+    #     tvec = camera_extrinsics[cam]['tvec']
+    ax.scatter(
+        tvec[0,:],
+        tvec[1,:],
+        tvec[2,:],
+        s=500,
+        c='b',
+        marker='.',
+        linewidth=.5,
+        alpha=1,
+    )
 
 
-# %%
-# Plot camera poses in WCS
+    # add labels
+    ax.set_title(cam)
+    ax.set_xlabel('x (mm)')
+    ax.set_ylabel('y (mm)')
+    ax.set_zlabel('z (mm)')
+    ax.axis('equal')
+
+
+# %%%%%%%%%%
+from extrinsic2pyramid.util.camera_pose_visualizer import CameraPoseVisualizer
+visualizer = CameraPoseVisualizer([-500, 500], [-500, 500], [0, 500])
+
+# define camera pose
+# argument : extrinsic matrix, color, scaled focal length(z-axis length of frame body of camera
+visualizer.extrinsic2pyramid(camera_extrinsics['front']['full'], 'c', 10)
+visualizer.show()
+
 
 
 # %%%%%%%%%%%%
