@@ -1,0 +1,6 @@
+*.pdf
+*.zip
+*.avi
+data/Calibration_videos/*
+dev/*
+extrinsic2pyramid/.git/*

@@ -1,0 +1,7 @@
+opencv-python
+ipympl
+
+# https://github.com/demul/extrinsic2pyramid
+numpy-quaternion
+matplotlib
+glob
