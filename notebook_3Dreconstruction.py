@@ -86,8 +86,8 @@ belt_coords_CCS = dict()
 for cam in list_cameras:
     imagePoints = np.array(
         [
-        df.loc[df['coords']=='x'][cam],
-        df.loc[df['coords']=='y'][cam]
+            df.loc[df['coords']=='x'][cam],
+            df.loc[df['coords']=='y'][cam]
         ] 
     ).T # imagePoints, NX2
 
@@ -137,10 +137,10 @@ for cam, ax in zip(list_cameras, axes.reshape(-1)):
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Belt points in world coord system
 belt_coords_WCS = np.array([
-    [0.0, 0.0, 10.0],
-    [470.0, 0.0, 10.0],
-    [470.0, 52.0, 10.0],
-    [0.0, 52.0, 10.0],
+    [0.0, 0.0, 0.0],
+    [470.0, 0.0, 0.0],
+    [470.0, 52.0, 0.0],
+    [0.0, 52.0, 0.0],
 ])
 
 # plot 3D
@@ -169,6 +169,19 @@ for id in range(belt_coords_WCS.shape[0]):
         c='r'
 )
 
+for row, col in zip(np.eye(3), ['r','g','b']):
+    ax.quiver(
+        0, 0, 0, 
+        row[0], row[1], row[2], 
+        color=col,
+        length=100, 
+        arrow_length_ratio=0,
+        normalize=True
+    )
+
+ax.set_xlabel('x (mm)')
+ax.set_ylabel('y (mm)')
+ax.axis('equal')
 # %% Estimate extrinsic matrix?
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -179,7 +192,7 @@ for cam in camera_specs.keys():
 
     fx = camera_specs[cam]['focal_length_mm']/camera_specs[cam]['pixel_size_x_mm']
     fy = camera_specs[cam]['focal_length_mm']/camera_specs[cam]['pixel_size_y_mm']
-    cx = int(camera_specs[cam]['x_size_px']/2.0) #---- centre or pixel coord?
+    cx = int(camera_specs[cam]['x_size_px']/2.0) #---- centre of pixel in centre or corner?
     cy = int(camera_specs[cam]['y_size_px']/2.0)
 
     camera_intrinsics[cam] = np.array(
@@ -226,7 +239,7 @@ camera_intrinsics
         
 # run pnp for each camera
 camera_extrinsics = dict()
-for cam in camera_specs.keys():
+for cam in camera_specs.keys(): #['overhead']: #
 
     # solvePnP
     # flags:
@@ -237,34 +250,52 @@ for cam in camera_specs.keys():
         belt_coords_CCS[cam], 
         camera_intrinsics[cam], # cameraMatrix,
         np.array([]), # no distorsion
-        rvec=,
-        tvec=,
-        useExtrinsicGuess=True,
-        cv2.SOLVEPNP_P3P
+        rvec=np.array([[0.0],[0.0],[-np.pi]]),
+        tvec=np.array([[-235.0],[-50.0],[25.0]]),
+        useExtrinsicGuess=True, # cv2.SOLVEPNP_IPPE,
+        flags=cv2.SOLVEPNP_IPPE,
+        # cv2.SOLVEPNP_IPPE,
+        # cv2.SOLVEPNP_P3P
     )
 
+    # compute full extrinsic
     rotm, _ = cv2.Rodrigues(rvec)
-    #-------
-    # tvec = np.zeros_like(tvec)
-    # --------
-
     camera_pose_full = np.vstack(
         [
             np.hstack([rotm, tvec]),
             np.flip(np.eye(1,4))
         ]
     )
-        
 
+    # reprojection error
+    belt_coords_CCS_repr, _ = cv2.projectPoints(
+        belt_coords_WCS, 
+        rvec, 
+        tvec, 
+        camera_intrinsics[cam], 
+        np.array([]), # no distorsion
+    )
+    belt_coords_CCS_repr = np.squeeze(belt_coords_CCS_repr)
+    error = np.sum(
+        np.linalg.norm(
+            belt_coords_CCS[cam] - belt_coords_CCS_repr, 
+            axis = 1
+        )
+    )/belt_coords_CCS[cam].shape[0]
+    # error = cv2.norm(imgpoints[i], imgpoints2, cv.NORM_L2)/len(imgpoints2)
+        
+    # save data
     camera_extrinsics[cam] = {
         'retval': retval,
         'rvec': rvec,
         'tvec': tvec,
         'rotm': rotm,
-        'full': camera_pose_full
+        'full': camera_pose_full,
+        'repr_err': error
     }
 
-
+camera_extrinsics['overhead']['rotm']
+# camera_extrinsics['overhead']['tvec']
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Plot camera poses in WCS
@@ -342,34 +373,105 @@ visualizer = CameraPoseVisualizer([-500, 500], [-500, 500], [0, 500])
 
 # define camera pose
 # argument : extrinsic matrix, color, scaled focal length(z-axis length of frame body of camera
-visualizer.extrinsic2pyramid(camera_extrinsics['front']['full'], 'c', 10)
+visualizer.extrinsic2pyramid(camera_extrinsics['overhead']['full'], 'c', 100)
 visualizer.show()
 
 
 
 # %%%%%%%%%%%%
-from mpl_toolkits.mplot3d import axes3d
-
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-
-# Grab some test data.
-X, Y, Z = axes3d.get_test_data(0.05)
-
-# Plot a basic wireframe.
-ax.plot_wireframe(X, Y, Z, rstride=10, cstride=10)
-
-plt.show()
-# %%
 from extrinsic2pyramid.util.camera_pose_visualizer import CameraPoseVisualizer
-import numpy as np
-%matplotlib widget
 
 # visualiser
 visualizer = CameraPoseVisualizer([-50, 50], [-50, 50], [0, 50])
 
 # define camera pose
 # argument : extrinsic matrix, color, scaled focal length(z-axis length of frame body of camera
-visualizer.extrinsic2pyramid(np.eye(4), 'c', 10)
+rot_m = np.array([
+    [1,0,0,0],
+    [0,1,0,0],
+    [0,0,1,0],
+    [0,0,0, 1]
+])
+rot_mx = np.array([
+    [1,0,0,0],
+    [0,0,-1,0],
+    [0,1,0,0],
+    [0,0,0, 1]
+])
+visualizer.extrinsic2pyramid(rot_mx, 'c', 10)
+
+
 visualizer.show()
+# %%%%%%%
+
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+
+# rot 90deg around x axis
+# in cols: rotated versors
+theta = -30*np.pi/180
+rot_mx = np.array([
+    [1,0,0,],
+    [0,np.cos(theta),-np.sin(theta),],
+    [0,np.sin(theta),np.cos(theta),],
+])
+
+for row, col in zip(np.eye(3), ['r','g','b']):
+    ax.quiver(
+        0, 0, 0, 
+        row[0], row[1], row[2], 
+        color=col,
+        # length=1, 
+        arrow_length_ratio=0,
+        # normalize=True
+    )
+for row, col in zip(rot_mx.T, ['m','y','c']):
+    ax.quiver(
+        0, 0, 0, 
+        row[0], row[1], row[2], 
+        color=col,
+        # length=1, 
+        arrow_length_ratio=0,
+        # normalize=True,
+        linestyle=':'
+    )
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+# ax.axis('equal')
+# %%
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+
+# rot 90deg around x axis
+# in cols: rotated versors
+theta = -30*np.pi/180
+rot_front = np.array([
+    [0,0,-1,],
+    [1,0,0,],
+    [0,-1,0,],
+])
+
+for row, col in zip(np.eye(3), ['r','g','b']):
+    ax.quiver(
+        0, 0, 0, 
+        row[0], row[1], row[2], 
+        color=col,
+        # length=1, 
+        arrow_length_ratio=0,
+        # normalize=True
+    )
+for row, col in zip(rot_front.T, ['m','y','c']):
+    ax.quiver(
+        0, 0, 0, 
+        row[0], row[1], row[2], 
+        color=col,
+        # length=1, 
+        arrow_length_ratio=0,
+        # normalize=True,
+        # linestyle=':'
+    )
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
 # %%
