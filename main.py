@@ -1,6 +1,5 @@
 # %%
 import cv2
-import pandas as pd
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -33,67 +32,81 @@ belt_pts.plot_WCS()
 
 # %%%%%%%%%%%%%%%%%%%%%%%%
 # Guess extrinsic matrices
-rot_side = np.array([
-    [1.,0.,0.,],
-    [0.,0.,1.,],
-    [0.,-1.,0.,],
-])
-rot_front = np.array([
-    [0.,0.,-1.,],
-    [1.,0.,0.,],
-    [0.,-1.,0.,],
-])
-rot_overhead = np.array([
-    [1.,0.,0.,],
-    [0.,-1.,0.,],
-    [0.,0.,-1.,],
-])
+# rot_side = np.array([
+#     [1.,0.,0.,],
+#     [0.,0.,1.,],
+#     [0.,-1.,0.,],
+# ])
+# rot_front = np.array([
+#     [0.,0.,-1.,],
+#     [1.,0.,0.,],
+#     [0.,-1.,0.,],
+# ])
+# rot_overhead = np.array([
+#     [1.,0.,0.,],
+#     [0.,-1.,0.,],
+#     [0.,0.,-1.,],
+# ])
 
-fig, ax = plot_rotated_CS_in_WCS(rot_side)
-ax.set_title('side')
+# fig, ax = plot_rotated_CS_in_WCS(rot_side)
+# ax.set_title('side')
 
-fig, ax = plot_rotated_CS_in_WCS(rot_front)
-ax.set_title('front')
+# fig, ax = plot_rotated_CS_in_WCS(rot_front)
+# ax.set_title('front')
 
-fig, ax = plot_rotated_CS_in_WCS(rot_overhead)
-ax.set_title('overhead')
+# fig, ax = plot_rotated_CS_in_WCS(rot_overhead)
+# ax.set_title('overhead')
 
-rvec_overhead, _ = cv2.Rodrigues(rot_overhead)
-rvec_front, _ = cv2.Rodrigues(rot_front)
-rvec_side, _ = cv2.Rodrigues(rot_side)
+# rvec_overhead, _ = cv2.Rodrigues(rot_overhead)
+# rvec_front, _ = cv2.Rodrigues(rot_front)
+# rvec_side, _ = cv2.Rodrigues(rot_side)
 # %%%%%%%%%%%%%%%%%%%%%
 # Estimate pose via PnP
 
-# solvePnP
-# flags:
-# initial guess?
-# https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#ga650ba4d286a96d992f82c3e6dfa525fa
-
-cam = 'overhead'
-retval, rvec, tvec = cv2.solvePnP(
+cameras_extrinsics = cameras.compute_cameras_extrinsics(
     belt_coords_WCS, 
-    belt_coords_CCS[cam], 
-    cameras_intrinsics[cam], # cameraMatrix,
-    np.array([]), # no distorsion
-    # rvec=rvec_overhead.copy(),
-    # tvec=np.array([[-470.0],[25.0],[70.0]]).copy(),
-    # useExtrinsicGuess=True, # cv2.SOLVEPNP_IPPE,
-    # flags=cv2.SOLVEPNP_ITERATIVE,
+    belt_coords_CCS
 )
 
-
-rotm, _ = cv2.Rodrigues(rvec)
-
-rotm.T
-tvec # vector from O' (origin of rotated frame) to O (WCS)
+print('Reprojection errors:')
+[(cam, cameras_extrinsics[cam]['repr_err']) for cam in cameras_extrinsics]
 
 
-# # compute full extrinsic
-# rotm, _ = cv2.Rodrigues(rvec)
-# camera_pose_full = np.vstack(
-#     [
-#         np.hstack([rotm, tvec]),
-#         np.flip(np.eye(1,4))
-#     ]
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Estimate with initial guess --- REVIEW (front very large)
+
+cameras_extrinsics = cameras.compute_cameras_extrinsics(
+    belt_coords_WCS, 
+    belt_coords_CCS,
+    guess_intrinsics=True
+)
+
+print('Reprojection errors:')
+[(cam, cameras_extrinsics[cam]['repr_err']) for cam in cameras_extrinsics]
+
+
+
+
+# # %%
+# # compute reprojection error
+# cam = 'overhead'
+# rvec = cameras_extrinsics[cam]['rvec']
+# tvec = cameras_extrinsics[cam]['tvec']
+# cam_intrinsics = cameras_intrinsics[cam]
+
+# belt_coords_CCS_repr, _ = cv2.projectPoints(
+#     belt_coords_WCS,
+#     rvec,
+#     tvec,
+#     cam_intrinsics,
+#     np.array([]),  # no distorsion
 # )
+# belt_coords_CCS_repr = np.squeeze(belt_coords_CCS_repr)
+# error = np.mean(
+#     np.linalg.norm(
+#         belt_coords_CCS_repr - belt_coords_CCS[cam],
+#         axis=1
+#     )
+# )
+# error
 # %%

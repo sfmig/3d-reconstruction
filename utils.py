@@ -15,6 +15,7 @@ class CameraData:
         self.specs = self.get_cameras_specs()
         self.views = self.get_cameras_views()
         self.intrinsic_matrices = self.get_cameras_intrinsics()
+        self.extrinsics_ini_guess = self.get_cameras_extrinsics_guess()
 
     def get_cameras_specs(self):
         camera_specs = {
@@ -68,19 +69,88 @@ class CameraData:
             )
         return camera_intrinsics
 
-    def compute_cameras_extrinsics(self, belt_coords_WCS, belt_coords_CCS):
+    def get_cameras_extrinsics_guess(self):
+        # size of volume
+        box_length = 470
+        box_width = 52
+        box_height = 70
+
+        # tvec guess
+        # tvec: vector from O' (origin of rotated CS) to WCS
+        # assuming cameras centres are approx at center of each side panel
+        tvec_guess = dict()
+        tvec_guess["side"] = np.array([-box_length / 2, -box_height / 2, box_width]).reshape(-1,1)
+        tvec_guess["front"] = np.array([-box_width / 2, -box_height / 2, box_length]).reshape(-1,1)
+        tvec_guess["overhead"] = np.array([-box_length / 2, box_width / 2, box_height]).reshape(-1,1)
+
+        # rotm using my definition, aka,
+        # in columns, the rotated WCS versors
+        # fmt: off
+        rot_m_guess = dict()
+        rot_m_guess['side'] = np.array(
+            [
+                [1.0, 0.0, 0.0,],
+                [0.0, 0.0, 1.0,],
+                [0.0, -1.0, 0.0,],
+            ]
+        )
+        rot_m_guess['front'] = np.array(
+            [
+                [0.0, 0.0, -1.0,],
+                [1.0, 0.0, 0.0,],
+                [0.0, -1.0, 0.0,],
+            ]
+        )
+        rot_m_guess['overhead'] = np.array(
+            [
+                [1.0, 0.0, 0.0,],
+                [0.0, -1.0, 0.0,],
+                [0.0, 0.0, -1.0,],
+            ]
+        )
+        # fmt: on
+
+        # prepare initial guess for solvePnP
+        # rotm.T, rvec, tvec
+        # OJO transpose rotm from my definition for opencv!
+        cameras_extrinsics_guess = dict()
+        for cam in self.specs.keys():
+            # Rodrigues vector on rotm with opencv convention
+            rodrigues_vec_opencv, _ = cv2.Rodrigues(rot_m_guess[cam].T)
+
+            # save params
+            cameras_extrinsics_guess[cam] = {
+                "rotm": rot_m_guess[cam].T,
+                "rvec": rodrigues_vec_opencv,
+                "tvec": tvec_guess[cam],
+            }
+
+        return cameras_extrinsics_guess
+
+    def compute_cameras_extrinsics(
+        self, belt_coords_WCS, belt_coords_CCS, guess_intrinsics=False
+    ):
         camera_extrinsics = dict()
         for cam in self.specs.keys():
-            retval, rvec, tvec = cv2.solvePnP(
-                belt_coords_WCS,
-                belt_coords_CCS[cam],
-                self.intrinsic_matrices[cam],
-                np.array([]),  # no distorsion
-                # rvec=rvec_overhead.copy(),
-                # tvec=np.array([[-470.0],[25.0],[70.0]]).copy(),
-                # useExtrinsicGuess=True, # cv2.SOLVEPNP_IPPE,
-                # flags=cv2.SOLVEPNP_ITERATIVE,
-            )
+            if not guess_intrinsics:
+                retval, rvec, tvec = cv2.solvePnP(
+                    belt_coords_WCS,
+                    belt_coords_CCS[cam],
+                    self.intrinsic_matrices[cam],
+                    np.array([]),  # no distorsion
+                    flags=cv2.SOLVEPNP_ITERATIVE,
+                )
+            else:
+                retval, rvec, tvec = cv2.solvePnP(
+                    belt_coords_WCS,
+                    belt_coords_CCS[cam],
+                    self.intrinsic_matrices[cam],
+                    np.array([]),  # no distorsion
+                    rvec=self.extrinsics_ini_guess[cam]["rvec"].copy(),
+                    tvec=self.extrinsics_ini_guess[cam]["tvec"].copy(),
+                    useExtrinsicGuess=True,
+                    flags=cv2.SOLVEPNP_ITERATIVE,
+                )
 
             # OJO!
             # - rotm.T: in columns, versors from WCS rotated
@@ -101,11 +171,8 @@ class CameraData:
                 np.array([]),  # no distorsion
             )
             belt_coords_CCS_repr = np.squeeze(belt_coords_CCS_repr)
-            error = (
-                np.sum(
-                    np.linalg.norm(belt_coords_CCS[cam] - belt_coords_CCS_repr, axis=1)
-                )
-                / belt_coords_CCS[cam].shape[0]
+            error = np.mean(
+                np.linalg.norm(belt_coords_CCS_repr - belt_coords_CCS[cam], axis=1)
             )
 
             # save data
