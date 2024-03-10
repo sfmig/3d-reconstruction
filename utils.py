@@ -74,14 +74,21 @@ class CameraData:
         box_length = 470
         box_width = 52
         box_height = 70
+        cam2panel_distance = 1000  # mm
 
         # tvec guess
         # tvec: vector from O' (origin of rotated CS) to WCS
         # assuming cameras centres are approx at center of each side panel
         tvec_guess = dict()
-        tvec_guess["side"] = np.array([-box_length / 2, -box_height / 2, box_width]).reshape(-1,1)
-        tvec_guess["front"] = np.array([-box_width / 2, -box_height / 2, box_length]).reshape(-1,1)
-        tvec_guess["overhead"] = np.array([-box_length / 2, box_width / 2, box_height]).reshape(-1,1)
+        tvec_guess["side"] = np.array(
+            [-box_length / 2, box_height / 2, cam2panel_distance]
+        ).reshape(-1, 1)
+        tvec_guess["front"] = np.array(
+            [-box_width / 2, box_height / 2, box_length + cam2panel_distance]
+        ).reshape(-1, 1)
+        tvec_guess["overhead"] = np.array(
+            [-box_length / 2, box_width / 2, box_height + cam2panel_distance]
+        ).reshape(-1, 1)
 
         # rotm using my definition, aka,
         # in columns, the rotated WCS versors
@@ -291,6 +298,8 @@ class BeltPoints:
             ax.set_ylabel("y (px)")
             ax.axis("equal")
 
+        return fig, axes
+
     def plot_WCS(self):
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
@@ -335,9 +344,11 @@ class BeltPoints:
         ax.set_ylabel("y (mm)")
         ax.axis("equal")
 
+        return fig, ax
 
-def plot_rotated_CS_in_WCS(rot_cam):
-    fig = plt.figure()
+
+def plot_rotated_CS_in_WCS(fig, rot_cam, trans_cam):
+    # fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
 
     # WCS
@@ -352,22 +363,22 @@ def plot_rotated_CS_in_WCS(rot_cam):
             color=col,
             # length=1,
             arrow_length_ratio=0,
-            # normalize=True
+            normalize=True,
         )
 
     # camera
     for row, col in zip(rot_cam.T, ["r", "g", "b"]):
         ax.quiver(
-            0,
-            0,
-            0,
+            trans_cam[0],
+            trans_cam[1],
+            trans_cam[2],
             row[0],
             row[1],
             row[2],
             color=col,
             # length=1,
             arrow_length_ratio=0,
-            # normalize=True,
+            normalize=True,
             linestyle=":",
             linewidth=4,
         )
