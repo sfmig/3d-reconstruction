@@ -335,7 +335,7 @@ class BeltPoints:
                 row[1],
                 row[2],
                 color=col,
-                length=100,
+                length=500,
                 arrow_length_ratio=0,
                 normalize=True,
             )

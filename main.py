@@ -110,41 +110,6 @@ for cam in cameras.specs:
         ax.axis("equal")
 
 
-
-# %%%%%%%%%%%%%%%%%%
-# Plot
-# for cam in cameras.specs:
-#     fig = plt.figure()
-#     fig, ax = plot_rotated_CS_in_WCS(
-#         fig, 
-#         cameras_extrinsics[cam]['rotm'].T,
-#         -cameras_extrinsics[cam]['rotm'].T @ cameras_extrinsics[cam]['tvec'])
-#     ax.set_title(cam)
-#     ax.axis('auto')
-
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Triangulate points
-# only 2-by-2 in openc
-# https://gist.github.com/davegreenwood/e1d2227d08e24cc4e353d95d0c18c914
-x1 = np.array([[274.128, 624.409]])
-x2 = np.array([[239.571, 533.568]])
-
-P1 = np.array([[5.010e+03, 0.000e+00, 3.600e+02, 0.000e+00],
-               [0.000e+00, 5.010e+03, 6.400e+02, 0.000e+00],
-               [0.000e+00, 0.000e+00, 1.000e+00, 0.000e+00]])
-
-P2 = np.array([[5.037e+03, -9.611e+01, -1.756e+03, 4.284e+03],
-               [2.148e+02,  5.354e+03,  1.918e+02, 8.945e+02],
-               [3.925e-01,  7.092e-02,  9.169e-01, 4.930e-01]])
-
-print('Triangulate 3d points - units in meters')
-# triangulatePoints requires 2xn arrays, so transpose the points
-p = cv2.triangulatePoints(P1, P2, x1.T, x2.T,)
-# however, homgeneous point is returned
-p /= p[3]
-print('Projected point from openCV:',  p.T)
-
-
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Multi-view triangulation
 # https://github.com/strawlab/pymvg/tree/master
@@ -157,3 +122,27 @@ print('Projected point from openCV:',  p.T)
 # bundle adjustment: 
 # https://github.com/nbhr/pycalib/blob/master/ipynb/ncam_ba.ipynb
 # https://scipy-cookbook.readthedocs.io/items/bundle_adjustment.html
+        
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Triangulate points -- opencv example
+# only 2-by-2 in opencv
+# https://gist.github.com/davegreenwood/e1d2227d08e24cc4e353d95d0c18c914
+# x1 = np.array([[274.128, 624.409]])
+# x2 = np.array([[239.571, 533.568]])
+
+# P1 = np.array([[5.010e+03, 0.000e+00, 3.600e+02, 0.000e+00],
+#                [0.000e+00, 5.010e+03, 6.400e+02, 0.000e+00],
+#                [0.000e+00, 0.000e+00, 1.000e+00, 0.000e+00]])
+
+# P2 = np.array([[5.037e+03, -9.611e+01, -1.756e+03, 4.284e+03],
+#                [2.148e+02,  5.354e+03,  1.918e+02, 8.945e+02],
+#                [3.925e-01,  7.092e-02,  9.169e-01, 4.930e-01]])
+
+# print('Triangulate 3d points - units in meters')
+# # triangulatePoints requires 2xn arrays, so transpose the points
+# p = cv2.triangulatePoints(P1, P2, x1.T, x2.T,)
+# # however, homgeneous point is returned
+# p /= p[3]
+# print('Projected point from openCV:',  p.T)
