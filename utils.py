@@ -340,8 +340,18 @@ class BeltPoints:
                 normalize=True,
             )
 
+        # # add text
+        ax.text(
+            0,
+            0,
+            500,
+            s="WCS",
+            c="k",
+        )
+
         ax.set_xlabel("x (mm)")
         ax.set_ylabel("y (mm)")
+        ax.set_zlabel("z (mm)")
         ax.axis("equal")
 
         return fig, ax
