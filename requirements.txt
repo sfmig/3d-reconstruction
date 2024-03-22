@@ -3,3 +3,4 @@ ipympl
 pandas
 numpy
 matplotlib
+ipykernel
