@@ -51,6 +51,7 @@ class CameraData:
         return camera_views
 
     def get_cameras_intrinsics(self):
+        # https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
         camera_intrinsics = dict()
         for cam in self.specs.keys():
             fx = self.specs[cam]["focal_length_mm"] / self.specs[cam]["pixel_size_x_mm"]
@@ -135,11 +136,11 @@ class CameraData:
         return cameras_extrinsics_guess
 
     def compute_cameras_extrinsics(
-        self, belt_coords_WCS, belt_coords_CCS, guess_intrinsics=False
+        self, belt_coords_WCS, belt_coords_CCS, use_extrinsics_ini_guess=False
     ):
         camera_extrinsics = dict()
         for cam in self.specs.keys():
-            if not guess_intrinsics:
+            if not use_extrinsics_ini_guess:
                 retval, rvec, tvec = cv2.solvePnP(
                     belt_coords_WCS,
                     belt_coords_CCS[cam],

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from utils import CameraData, BeltPoints, plot_rotated_CS_in_WCS
 
 %matplotlib widget
-%matplotlib widget
 
 # %%%%%%%%%%%%%
 # Camera data
@@ -47,7 +46,7 @@ print('Reprojection errors:')
 cameras_extrinsics_ini_guess = cameras.compute_cameras_extrinsics(
     belt_coords_WCS, 
     belt_coords_CCS,
-    guess_intrinsics=True
+    use_extrinsics_ini_guess=True
 )
 
 print('Reprojection errors (w/ initial guess):')
@@ -120,6 +119,7 @@ for cam in cameras.specs:
 
 
 # bundle adjustment: 
+        # https://stackoverflow.com/questions/39745798/whats-the-conceptual-difference-between-bundle-adjustment-and-structure-from-mo
 # https://github.com/nbhr/pycalib/blob/master/ipynb/ncam_ba.ipynb
 # https://scipy-cookbook.readthedocs.io/items/bundle_adjustment.html
         
