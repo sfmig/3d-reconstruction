@@ -3,7 +3,7 @@
 
 For a simple case using `opencv`'s `solvePnP` algorithm.
 
-### To run the notebook `compute_camera_extrinsics.ipynb`
+### To run the notebook locally
 
 1. Create a Python virtual environment. 
     For example to use `conda` to create an environment called `3d-reconstruction`:
@@ -19,7 +19,15 @@ For a simple case using `opencv`'s `solvePnP` algorithm.
     ```
     pip install -r requirements.txt 
     ```
-4. You should be able to run the notebook in the created virtual environment :tada: 
+4. You should be able to run the `compute_camera_extrinsics.ipynb` notebook in the created virtual environment :tada: 
+
+<!-- ### To run the notebook on Github codespaces
+1. From the Github main page of the repo, click on Code > Codespaces tab > Open in codespace
+2. Open the notebook in the VSCode editor and click on Select kernel (top right)
+3. In the pop-up menu, select Install suggested extensions
+4. Then click on `Select a Python Environment` > `Create` > `venv` > choose your Python version > Select `requirements.txt` file.
+    - This will create a virtual environment called `.venv` -->
+
 
 ### Next steps
 
