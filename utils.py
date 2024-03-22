@@ -2,14 +2,20 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import cv2
+from pathlib import Path
 
 
 class CameraData:
+    """A class holding the data for all three cameras.
+
+    TODO: probably a class per camera makes more sense.
+    """
+
     def __init__(self):
         self.view_paths = {
-            "side": "/Users/sofia/swc/project_3Dhomography/data/Side_80200.png",
-            "front": "/Users/sofia/swc/project_3Dhomography/data/Front_80200.png",
-            "overhead": "/Users/sofia/swc/project_3Dhomography/data/Overhead_80200.png",
+            "side": str(Path(__file__).parent) + "/data/Side_80200.png",
+            "front": str(Path(__file__).parent) + "/data/Front_80200.png",
+            "overhead": str(Path(__file__).parent) + "/data/Overhead_80200.png",
         }
 
         self.specs = self.get_cameras_specs()
@@ -17,7 +23,10 @@ class CameraData:
         self.intrinsic_matrices = self.get_cameras_intrinsics()
         self.extrinsics_ini_guess = self.get_cameras_extrinsics_guess()
 
-    def get_cameras_specs(self):
+    def get_cameras_specs(self) -> dict:
+        """
+        Return a dictionary with the camera specs for each camera.
+        """
         camera_specs = {
             "side": {
                 "focal_length_mm": 16,
@@ -44,23 +53,35 @@ class CameraData:
 
         return camera_specs
 
-    def get_cameras_views(self):
+    def get_cameras_views(self) -> dict:
+        """
+        Return a dictionary with the camera specs for each camera.
+        """
         camera_views = dict()
         for cam, path in self.view_paths.items():
             camera_views[cam] = plt.imread(path)
         return camera_views
 
-    def get_cameras_intrinsics(self):
-        # https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+    def get_cameras_intrinsics(self) -> dict:
+        """
+        Define the cameras' intrinsic matrices from technical specs data.
+
+        Each camera intrinsic matrix would correspond to matrix A in the first equation at
+        https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+
+        """
         camera_intrinsics = dict()
         for cam in self.specs.keys():
+            # focal length in pixels
             fx = self.specs[cam]["focal_length_mm"] / self.specs[cam]["pixel_size_x_mm"]
             fy = self.specs[cam]["focal_length_mm"] / self.specs[cam]["pixel_size_y_mm"]
-            cx = int(
-                self.specs[cam]["x_size_px"] / 2.0
-            )  # ---- centre of pixel in centre or corner?
-            cy = int(self.specs[cam]["y_size_px"] / 2.0)
 
+            # origin offset
+            cx = int(self.specs[cam]["x_size_px"] / 2.0)
+            cy = int(self.specs[cam]["y_size_px"] / 2.0)
+            # potentially refine cx, cy to the centre of the middle pixel?
+
+            # build intrinsics matrix
             camera_intrinsics[cam] = np.array(
                 [
                     [fx, 0.0, cx],
@@ -70,16 +91,23 @@ class CameraData:
             )
         return camera_intrinsics
 
-    def get_cameras_extrinsics_guess(self):
-        # size of volume
-        box_length = 470
-        box_width = 52
-        box_height = 70
-        cam2panel_distance = 1000  # mm
+    def get_cameras_extrinsics_guess(self) -> dict:
+        """
+        Define an initial guess for the cameras' extrinsic matrices.
 
-        # tvec guess
-        # tvec: vector from O' (origin of rotated CS) to WCS
-        # assuming cameras centres are approx at center of each side panel
+        Each camera extrinsic matrix would correspond to matrix $T_w$ in the first equation at
+        https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html
+
+        """
+        # Estimated size of captured volume
+        box_length = 470  # mm
+        box_width = 52  # mm
+        box_height = 70  # mm
+        cam2panel_distance = 1000  # mm; estimated distance between a CCS origin and the closest plane in the captured volume.
+
+        # Initial guess for the translation vector (tvec) from each camera
+        # tvec: is expressed in CCS; from the origin of the CCS to the origin of the WCS.
+        # I assume each camera centre is ~1m from the centre of the captured volume's closest plane.
         tvec_guess = dict()
         tvec_guess["side"] = np.array(
             [-box_length / 2, box_height / 2, cam2panel_distance]
@@ -91,8 +119,10 @@ class CameraData:
             [-box_length / 2, box_width / 2, box_height + cam2panel_distance]
         ).reshape(-1, 1)
 
-        # rotm using my definition, aka,
-        # in columns, the rotated WCS versors
+        # Initial guess for the rotation matrix
+        # I use my definition, that is,
+        # in columns, I have the rotated WCS versors
+        # NOTE: fmt: off avoids the linter from formatting the following lines
         # fmt: off
         rot_m_guess = dict()
         rot_m_guess['side'] = np.array(
@@ -117,16 +147,16 @@ class CameraData:
             ]
         )
         # fmt: on
+        # NOTE: fmt: on reactivates the linter for the following lines
 
-        # prepare initial guess for solvePnP
-        # rotm.T, rvec, tvec
-        # OJO transpose rotm from my definition for opencv!
+        # Build initial guess for the extrinsic matrix [R|t]
+        # NOTE: I need to transpose rotm to match opencv's definition
         cameras_extrinsics_guess = dict()
         for cam in self.specs.keys():
-            # Rodrigues vector on rotm with opencv convention
+            # Compute Rodrigues vector on rotm with opencv convention
             rodrigues_vec_opencv, _ = cv2.Rodrigues(rot_m_guess[cam].T)
 
-            # save params
+            # Save parameters
             cameras_extrinsics_guess[cam] = {
                 "rotm": rot_m_guess[cam].T,
                 "rvec": rodrigues_vec_opencv,
@@ -136,10 +166,20 @@ class CameraData:
         return cameras_extrinsics_guess
 
     def compute_cameras_extrinsics(
-        self, belt_coords_WCS, belt_coords_CCS, use_extrinsics_ini_guess=False
-    ):
+        self,
+        belt_coords_WCS: np.ndarray,
+        belt_coords_CCS: dict,
+        use_extrinsics_ini_guess: bool = False,
+    ) -> dict:
+        """
+        Apply solvePnP algorithm to estimate the extrinsic matrix for each camera.
+        """
+        # initialise dict with extrinsics
         camera_extrinsics = dict()
+
+        # for every camera
         for cam in self.specs.keys():
+            # if no guess for the intrinsic matrices is provided
             if not use_extrinsics_ini_guess:
                 retval, rvec, tvec = cv2.solvePnP(
                     belt_coords_WCS,
@@ -148,6 +188,7 @@ class CameraData:
                     np.array([]),  # no distorsion
                     flags=cv2.SOLVEPNP_ITERATIVE,
                 )
+            # else: use the initial guess
             else:
                 retval, rvec, tvec = cv2.solvePnP(
                     belt_coords_WCS,
@@ -160,12 +201,10 @@ class CameraData:
                     flags=cv2.SOLVEPNP_ITERATIVE,
                 )
 
-            # OJO!
-            # - rotm.T: in columns, versors from WCS rotated
-            # - tvec: vector from O' (origin of rotated frame) to O (WCS)
-
-            # compute full extrinsic
-            rotm, _ = cv2.Rodrigues(rvec)
+            # build the full extrinsic matrix [R|t]
+            rotm, _ = cv2.Rodrigues(
+                rvec
+            )  # transform Rodrigues vector to opencv rotation matrix
             camera_pose_full = np.vstack(
                 [np.hstack([rotm, tvec]), np.flip(np.eye(1, 4))]
             )
@@ -176,14 +215,14 @@ class CameraData:
                 rvec,
                 tvec,
                 self.intrinsic_matrices[cam],
-                np.array([]),  # no distorsion
+                np.array([]),  # we assume no distorsion
             )
             belt_coords_CCS_repr = np.squeeze(belt_coords_CCS_repr)
             error = np.mean(
                 np.linalg.norm(belt_coords_CCS_repr - belt_coords_CCS[cam], axis=1)
             )
 
-            # save data
+            # add results to dict
             camera_extrinsics[cam] = {
                 "retval": retval,
                 "rvec": rvec,
@@ -197,10 +236,14 @@ class CameraData:
 
 
 class BeltPoints:
+    """A class to hold the data of the selected beltpoints"""
+
     def __init__(self):
         self.coords_csv = (
-            "/Users/sofia/swc/project_3Dhomography/data/belt_corner_coords_80200.csv"
+            str(Path(__file__).parent) + "/data/belt_corner_coords_80200.csv"
         )
+
+        # map string to integer label for each point
         self.points_str2int = {
             "StartPlatR": 0,
             "StartPlatL": 3,
@@ -212,7 +255,10 @@ class BeltPoints:
         self.coords_CCS = self.get_points_in_CCS()
         self.coords_WCS = self.get_points_in_WCS()
 
-    def get_points_in_WCS(self):
+    def get_points_in_WCS(self) -> np.ndarray:
+        """
+        Express belt points in the WCS.
+        """
         return np.array(
             [
                 [0.0, 0.0, 0.0],
@@ -222,7 +268,10 @@ class BeltPoints:
             ]
         )
 
-    def get_points_in_CCS(self):
+    def get_points_in_CCS(self) -> dict:
+        """
+        Express points in each camera's coord system.
+        """
         # read csv as table
         df = pd.read_csv(self.coords_csv, sep=",")
 
@@ -242,14 +291,17 @@ class BeltPoints:
         for cam in list_cameras:
             imagePoints = np.array(
                 [df.loc[df["coords"] == "x"][cam], df.loc[df["coords"] == "y"][cam]]
-            ).T  # imagePoints, NX2
+            ).T
 
             # sort them by point ID
             belt_coords_CCS[cam] = imagePoints[sorted_idcs_by_pt_ID, :]
 
         return belt_coords_CCS
 
-    def plot_CCS(self, camera):
+    def plot_CCS(self, camera: CameraData):
+        """
+        Plot belt points in each CCS.
+        """
         # Check belt points in CCS (1-3)
         fig, axes = plt.subplots(2, 2)
 
@@ -302,6 +354,10 @@ class BeltPoints:
         return fig, axes
 
     def plot_WCS(self):
+        """
+        Plot belt points in WCS.
+        """
+
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
 
@@ -341,7 +397,7 @@ class BeltPoints:
                 normalize=True,
             )
 
-        # # add text
+        # add text
         ax.text(
             0,
             0,
@@ -359,7 +415,10 @@ class BeltPoints:
 
 
 def plot_rotated_CS_in_WCS(fig, rot_cam, trans_cam):
-    # fig = plt.figure()
+    """
+    Plot camera coordinate systems in the WCS.
+    """
+
     ax = fig.add_subplot(projection="3d")
 
     # WCS
@@ -377,7 +436,7 @@ def plot_rotated_CS_in_WCS(fig, rot_cam, trans_cam):
             normalize=True,
         )
 
-    # camera
+    # camera coordinate systems
     for row, col in zip(rot_cam.T, ["r", "g", "b"]):
         ax.quiver(
             trans_cam[0],
@@ -387,7 +446,6 @@ def plot_rotated_CS_in_WCS(fig, rot_cam, trans_cam):
             row[1],
             row[2],
             color=col,
-            # length=1,
             arrow_length_ratio=0,
             normalize=True,
             linestyle=":",
